@@ -27,12 +27,12 @@ fn main() {
 
     memory_list.list.push(MemoryDescriptor {
         start_of_memory: 0xffffffaa345000,
-        buf: &[77, 90, 0xff, 1, 2, 3, 4, 5, 6, 7, 2, 3, 3],
+        buf: &[77, 90, 0xff, 1, 2, 3, 4, 5, 6, 7, 2, 3, 3][..],
     });
 
     memory_list.list.push(MemoryDescriptor {
         start_of_memory: 0xffffffaa349000,
-        buf: &[37, 10, 0xf3, 1, 2, 3, 4, 5, 6, 7, 2, 3, 3, 1],
+        buf: &[37, 10, 0xf3, 1, 2, 3, 4, 5, 6, 7, 2, 3, 3, 1][..],
     });
 
     minidump.directory.push(Box::new(memory_list));

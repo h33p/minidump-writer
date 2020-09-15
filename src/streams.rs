@@ -1,5 +1,6 @@
 use minidump_common::format as md;
 use std::io::{self, Cursor, Seek, SeekFrom, Write};
+use std::ops::Deref;
 
 use crate::md_extras;
 use crate::util::as_slice;
@@ -83,11 +84,11 @@ pub struct MinidumpModule {
 }
 
 #[derive(Default)]
-pub struct MemoryListStream<'a> {
-    pub list: Vec<MemoryDescriptor<'a>>,
+pub struct MemoryListStream<T> {
+    pub list: Vec<MemoryDescriptor<T>>,
 }
 
-impl MinidumpStream for MemoryListStream<'_> {
+impl<T: Deref<Target = [u8]>> MinidumpStream for MemoryListStream<T> {
     fn write(&self, pos: usize, writer: &mut dyn Write) -> io::Result<()> {
         writer.write_all(&(self.list.len() as u32).to_ne_bytes())?;
 
@@ -100,7 +101,7 @@ impl MinidumpStream for MemoryListStream<'_> {
 
         for i in &self.list {
             let rva = end + cursor.seek(SeekFrom::Current(0))? as usize;
-            cursor.write_all(i.buf)?;
+            cursor.write_all(i.buf.deref())?;
 
             let descriptor = md::MDMemoryDescriptor {
                 start_of_memory_range: i.start_of_memory,
@@ -123,11 +124,11 @@ impl MinidumpStream for MemoryListStream<'_> {
 }
 
 #[derive(Default)]
-pub struct Memory64ListStream<'a> {
-    pub list: Vec<MemoryDescriptor<'a>>,
+pub struct Memory64ListStream<T> {
+    pub list: Vec<MemoryDescriptor<T>>,
 }
 
-impl MinidumpStream for Memory64ListStream<'_> {
+impl<T: Deref<Target = [u8]>> MinidumpStream for Memory64ListStream<T> {
     fn write(&self, pos: usize, writer: &mut dyn Write) -> io::Result<()> {
         writer.write_all(&(self.list.len() as u64).to_ne_bytes())?;
 
@@ -142,7 +143,7 @@ impl MinidumpStream for Memory64ListStream<'_> {
         let mut cursor = Cursor::new(&mut end_buf);
 
         for i in &self.list {
-            cursor.write_all(i.buf)?;
+            cursor.write_all(i.buf.deref())?;
 
             let descriptor = md_extras::MDMemoryDescriptor64 {
                 start_of_memory_range: i.start_of_memory,
@@ -161,19 +162,54 @@ impl MinidumpStream for Memory64ListStream<'_> {
     }
 }
 
-pub struct MemoryDescriptor<'a> {
+pub struct MemoryDescriptor<T> {
     pub start_of_memory: u64,
-    pub buf: &'a [u8],
+    pub buf: T,
 }
 
 #[derive(Default)]
 pub struct SystemInfoStream {
-    system_info: md::MDRawSystemInfo,
+    pub system_info: md::MDRawSystemInfo,
+    pub service_pack_str: String,
+}
+
+impl SystemInfoStream {
+    pub fn with_arch_and_version(
+        arch: u32,
+        major_version: u32,
+        minor_version: u32,
+        build_number: u32,
+    ) -> Self {
+        Self {
+            system_info: md::MDRawSystemInfo {
+                processor_architecture: arch as _,
+                major_version,
+                minor_version,
+                build_number,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
 }
 
 impl MinidumpStream for SystemInfoStream {
-    fn write(&self, _pos: usize, writer: &mut dyn Write) -> io::Result<()> {
-        writer.write_all(unsafe { as_slice(&self.system_info) })?;
+    fn write(&self, pos: usize, writer: &mut dyn Write) -> io::Result<()> {
+        let end = pos + std::mem::size_of::<md::MDRawSystemInfo>();
+        let mut system_info = self.system_info;
+        system_info.csd_version_rva = end as _;
+
+        writer.write_all(unsafe { as_slice(&system_info) })?;
+
+        let mut win_str: Vec<u8> = vec![];
+        for c in self.service_pack_str.encode_utf16() {
+            win_str.extend_from_slice(&c.to_ne_bytes());
+        }
+        writer.write_all(&(win_str.len() as u32).to_ne_bytes())?;
+        writer.write_all(&win_str)?;
+        // Null terminator
+        writer.write_all(&0u16.to_ne_bytes())?;
+
         Ok(())
     }
 
