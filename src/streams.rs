@@ -1,5 +1,5 @@
 use minidump_common::format as md;
-use std::io::{self, Cursor, Seek, SeekFrom, Write};
+use std::io::{self, Cursor, Seek, Write};
 use std::ops::Deref;
 
 use crate::md_extras;
@@ -31,7 +31,7 @@ impl MinidumpStream for ModuleListStream {
             for c in i.name.encode_utf16() {
                 win_str.extend_from_slice(&c.to_ne_bytes());
             }
-            let rva = end + cursor.seek(SeekFrom::Current(0))? as usize;
+            let rva = end + cursor.stream_position()? as usize;
             cursor.write_all(&(win_str.len() as u32).to_ne_bytes())?;
             cursor.write_all(&win_str)?;
             // Null terminator
@@ -100,7 +100,7 @@ impl<T: Deref<Target = [u8]>> MinidumpStream for MemoryListStream<T> {
         let mut cursor = Cursor::new(&mut end_buf);
 
         for i in &self.list {
-            let rva = end + cursor.seek(SeekFrom::Current(0))? as usize;
+            let rva = end + cursor.stream_position()? as usize;
             cursor.write_all(i.buf.deref())?;
 
             let descriptor = md::MINIDUMP_MEMORY_DESCRIPTOR {

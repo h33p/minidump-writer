@@ -1,7 +1,7 @@
 use crate::streams::MinidumpStream;
 use crate::util::as_slice;
 use minidump_common::format as md;
-use std::io::{self, Cursor, Seek, SeekFrom, Write};
+use std::io::{self, Cursor, Seek, Write};
 
 #[derive(Default)]
 pub struct Minidump {
@@ -29,9 +29,9 @@ impl Minidump {
 
         for st in &self.directory {
             let stream_type = st.stream_type();
-            let pos_start = cursor.seek(SeekFrom::Current(0))? as usize;
+            let pos_start = cursor.stream_position()? as usize;
             st.write(pos_start + offset, &mut cursor)?;
-            let pos_end = cursor.seek(SeekFrom::Current(0))? as usize;
+            let pos_end = cursor.stream_position()? as usize;
 
             // Pad the end so that the next entry is aligned
             let padding = 4 - pos_end % 4;
@@ -47,13 +47,13 @@ impl Minidump {
             });
         }
 
-        writer.write(unsafe { as_slice(&header) })?;
+        _ = writer.write(unsafe { as_slice(&header) })?;
 
         for d in &directories {
-            writer.write(unsafe { as_slice(d) })?;
+            _ = writer.write(unsafe { as_slice(d) })?;
         }
 
-        writer.write(&buf)?;
+        _ = writer.write(&buf)?;
 
         Ok(())
     }
