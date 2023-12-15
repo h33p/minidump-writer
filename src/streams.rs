@@ -21,7 +21,7 @@ impl MinidumpStream for ModuleListStream {
 
         let end = pos
             + std::mem::size_of::<u32>()
-            + self.modules.len() * std::mem::size_of::<md::MDRawModule>();
+            + self.modules.len() * std::mem::size_of::<md::MINIDUMP_MODULE>();
 
         let mut end_buf: Vec<u8> = vec![];
         let mut cursor = Cursor::new(&mut end_buf);
@@ -37,17 +37,17 @@ impl MinidumpStream for ModuleListStream {
             // Null terminator
             cursor.write_all(&0u16.to_ne_bytes())?;
 
-            let module = md::MDRawModule {
+            let module = md::MINIDUMP_MODULE {
                 base_of_image: i.base_of_image,
                 size_of_image: i.size_of_image,
                 time_date_stamp: i.time_date_stamp,
                 checksum: i.checksum,
                 module_name_rva: rva as _,
-                cv_record: md::MDLocationDescriptor {
+                cv_record: md::MINIDUMP_LOCATION_DESCRIPTOR {
                     data_size: 0,
                     rva: 0,
                 },
-                misc_record: md::MDLocationDescriptor {
+                misc_record: md::MINIDUMP_LOCATION_DESCRIPTOR {
                     data_size: 0,
                     rva: 0,
                 },
@@ -94,7 +94,7 @@ impl<T: Deref<Target = [u8]>> MinidumpStream for MemoryListStream<T> {
 
         let end = pos
             + std::mem::size_of::<u32>()
-            + self.list.len() * std::mem::size_of::<md::MDMemoryDescriptor>();
+            + self.list.len() * std::mem::size_of::<md::MINIDUMP_MEMORY_DESCRIPTOR>();
 
         let mut end_buf: Vec<u8> = vec![];
         let mut cursor = Cursor::new(&mut end_buf);
@@ -103,9 +103,9 @@ impl<T: Deref<Target = [u8]>> MinidumpStream for MemoryListStream<T> {
             let rva = end + cursor.seek(SeekFrom::Current(0))? as usize;
             cursor.write_all(i.buf.deref())?;
 
-            let descriptor = md::MDMemoryDescriptor {
+            let descriptor = md::MINIDUMP_MEMORY_DESCRIPTOR {
                 start_of_memory_range: i.start_of_memory,
-                memory: md::MDLocationDescriptor {
+                memory: md::MINIDUMP_LOCATION_DESCRIPTOR {
                     data_size: i.buf.len() as _,
                     rva: rva as _,
                 },
@@ -167,10 +167,32 @@ pub struct MemoryDescriptor<T> {
     pub buf: T,
 }
 
-#[derive(Default)]
 pub struct SystemInfoStream {
-    pub system_info: md::MDRawSystemInfo,
+    pub system_info: md::MINIDUMP_SYSTEM_INFO,
     pub service_pack_str: String,
+}
+
+impl Default for SystemInfoStream {
+    fn default() -> Self {
+        Self {
+            system_info: md::MINIDUMP_SYSTEM_INFO {
+                processor_architecture: 0,
+                processor_level: 0,
+                processor_revision: 0,
+                number_of_processors: 0,
+                major_version: 0,
+                minor_version: 0,
+                build_number: 0,
+                product_type: 0,
+                platform_id: 0,
+                csd_version_rva: 0,
+                suite_mask: 0,
+                reserved2: 0,
+                cpu: md::CPU_INFORMATION { data: [0; 24] },
+            },
+            service_pack_str: String::new(),
+        }
+    }
 }
 
 impl SystemInfoStream {
@@ -181,12 +203,22 @@ impl SystemInfoStream {
         build_number: u32,
     ) -> Self {
         Self {
-            system_info: md::MDRawSystemInfo {
+            system_info: md::MINIDUMP_SYSTEM_INFO {
                 processor_architecture: arch as _,
                 major_version,
                 minor_version,
                 build_number,
-                ..Default::default()
+
+                // defaults
+                processor_level: 0,
+                processor_revision: 0,
+                number_of_processors: 0,
+                product_type: 0,
+                platform_id: 0,
+                csd_version_rva: 0,
+                suite_mask: 0,
+                reserved2: 0,
+                cpu: md::CPU_INFORMATION { data: [0; 24] },
             },
             ..Default::default()
         }
@@ -195,8 +227,8 @@ impl SystemInfoStream {
 
 impl MinidumpStream for SystemInfoStream {
     fn write(&self, pos: usize, writer: &mut dyn Write) -> io::Result<()> {
-        let end = pos + std::mem::size_of::<md::MDRawSystemInfo>();
-        let mut system_info = self.system_info;
+        let end = pos + std::mem::size_of::<md::MINIDUMP_SYSTEM_INFO>();
+        let mut system_info = self.system_info.clone();
         system_info.csd_version_rva = end as _;
 
         writer.write_all(unsafe { as_slice(&system_info) })?;

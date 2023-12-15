@@ -10,11 +10,11 @@ pub struct Minidump {
 
 impl Minidump {
     pub fn write_all<T: Write + Seek>(&self, writer: &mut T) -> io::Result<()> {
-        let header = md::MDRawHeader {
-            signature: md::MD_HEADER_SIGNATURE,
-            version: md::MD_HEADER_VERSION,
+        let header = md::MINIDUMP_HEADER {
+            signature: md::MINIDUMP_SIGNATURE,
+            version: md::MINIDUMP_VERSION,
             stream_count: self.directory.len() as _,
-            stream_directory_rva: std::mem::size_of::<md::MDRawHeader>() as _,
+            stream_directory_rva: std::mem::size_of::<md::MINIDUMP_HEADER>() as _,
             checksum: 0,
             time_date_stamp: 0,
             flags: 0,
@@ -23,7 +23,7 @@ impl Minidump {
         let mut buf = vec![];
         let mut cursor = Cursor::new(&mut buf);
         let offset: usize = header.stream_directory_rva as usize
-            + self.directory.len() * std::mem::size_of::<md::MDRawDirectory>();
+            + self.directory.len() * std::mem::size_of::<md::MINIDUMP_DIRECTORY>();
 
         let mut directories = vec![];
 
@@ -38,9 +38,9 @@ impl Minidump {
             cursor.write_all(&0u64.to_le_bytes()[..padding])?;
             let pos_end = pos_end + padding;
 
-            directories.push(md::MDRawDirectory {
+            directories.push(md::MINIDUMP_DIRECTORY {
                 stream_type,
-                location: md::MDLocationDescriptor {
+                location: md::MINIDUMP_LOCATION_DESCRIPTOR {
                     data_size: (pos_end - pos_start) as _,
                     rva: (pos_start + offset) as _,
                 },
